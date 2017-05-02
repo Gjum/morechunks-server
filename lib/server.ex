@@ -1,35 +1,31 @@
 defmodule ChunkFix.Server do
   require Logger
 
-  def start_link(port) do
-    pid = spawn_link(fn -> init(port) end)
-    {:ok, pid}
+  def listen(port) do
+    Process.register(self(), __MODULE__) # give this process a name
+    Logger.info "starting tcp server at port #{inspect port}"
+    {:ok, server_sock} = :gen_tcp.listen(port, [mode: :binary, packet: 4, active: false, reuseaddr: true])
+    listen_loop(server_sock)
   end
 
-  defp init(port) do
-    tcp_options = [:list, {:packet, 0}, {:active, false}, {:reuseaddr, true}]
-    {:ok, listen_socket} = :gen_tcp.listen(port, tcp_options)
-    listen_loop(listen_socket)
+  def listen_loop(server_sock) do
+    {:ok, client_sock} = :gen_tcp.accept(server_sock)
+    {:ok, pid} = Task.Supervisor.start_child(ChunkFix.Server.Supervisor, fn -> serve(client_sock) end)
+    __MODULE__.listen_loop(server_sock)
   end
 
-  defp listen_loop(listen_socket) do
-    {:ok, socket} = :gen_tcp.accept(listen_socket)
-    spawn(fn() -> serve_loop(socket) end)
-    listen_loop(listen_socket)
+  def serve(client_sock) do
+    :gen_tcp.controlling_process(client_sock, self())
+    {:ok, remote} = :inet.peername(client_sock)
+    Logger.debug "New connection from #{inspect remote}"
+    result = serve_loop(client_sock)
+    Logger.debug "Connection closed at #{inspect remote} with #{inspect result}"
   end
 
-  defp serve_loop(socket) do
-    case :gen_tcp.recv(socket, 0) do
-
-      {:ok, data} ->
-        Logger.debug(inspect data)
-        # ChunkFix.ChunkStorage.store()
-        # ChunkFix.ChunkStorage.lookup()
-        # :gen_tcp.send(socket, "#{response}\n")
-        serve_loop(socket)
-
-      {:error, :closed} -> :ok
-
+  def serve_loop(client_sock) do
+    with {:ok, data} <- :gen_tcp.recv(client_sock, 0),
+         :ok <- ChunkFix.Protocol.handle_packet(data, client_sock) do
+      __MODULE__.serve_loop(client_sock)
     end
   end
 

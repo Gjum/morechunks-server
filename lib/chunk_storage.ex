@@ -1,10 +1,12 @@
 defmodule ChunkFix.ChunkStorage do
   use GenServer
 
+  require Logger
+
   ## Client API
 
-  def start_link do
-    GenServer.start_link(__MODULE__, :ok, [])
+  def start_link() do
+    GenServer.start_link(__MODULE__, [], [name: __MODULE__])
   end
 
   def store(position, packet_data) do
@@ -18,21 +20,24 @@ defmodule ChunkFix.ChunkStorage do
 
   ## Server Callbacks
 
-  def init(:ok) do
+  def init(args) do
+    Logger.info "Starting ChunkStorage, args: #{inspect args}"
     {:ok, %{}}
   end
 
-  def terminate(reason, state) do
+  def terminate(reason, _state) do
+    Logger.warn "Terminating ChunkStorage, reason: #{inspect reason}"
   end
 
   def handle_cast({:store, position, packet_data}, storage) do
+    Logger.info "Storing chunk at #{inspect position}, size: #{inspect byte_size(packet_data)}"
     {:noreply, Map.put(storage, position, packet_data)}
   end
 
   def handle_call({:lookup, position}, _from, storage) do
     chunk = case Map.fetch(storage, position) do
       {:ok, chunk} -> chunk
-      :error -> :nil # TODO get from disk
+      # :error -> # TODO get from disk
     end
     {:reply, chunk, storage}
   end

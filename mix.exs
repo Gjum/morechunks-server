@@ -18,6 +18,8 @@ defmodule ChunkFix.Mixfile do
   end
 
   defp deps do
-    []
+    [
+      {:socket, "~> 0.3"},
+    ]
   end
 end
