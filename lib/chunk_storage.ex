@@ -9,13 +9,26 @@ defmodule ChunkFix.ChunkStorage do
     GenServer.start_link(__MODULE__, [], [name: __MODULE__])
   end
 
+  @doc """
+  Store the serialized chunk.
+
+  ## Parameters
+    - position: 64Bit number representing the chunk cordinates.
+    - packet_data: serialized chunk in the form of a Chunk Data packet.
+  """
   def store(position, packet_data) do
     # TODO timestamp
     GenServer.cast(__MODULE__, {:store, position, packet_data})
   end
 
-  def lookup(position) do
-    GenServer.call(__MODULE__, {:lookup, position})
+  @doc """
+  Retrieve a serialized chunk.
+
+  ## Parameters
+    - position: 64Bit number representing the chunk cordinates.
+  """
+  def retrieve(position) do
+    GenServer.call(__MODULE__, {:retrieve, position})
   end
 
   ## Server Callbacks
@@ -34,10 +47,10 @@ defmodule ChunkFix.ChunkStorage do
     {:noreply, Map.put(storage, position, packet_data)}
   end
 
-  def handle_call({:lookup, position}, _from, storage) do
+  def handle_call({:retrieve, position}, _from, storage) do
     chunk = case Map.fetch(storage, position) do
       {:ok, chunk} -> chunk
-      # :error -> # TODO get from disk
+      :error -> "" # TODO get from disk
     end
     {:reply, chunk, storage}
   end

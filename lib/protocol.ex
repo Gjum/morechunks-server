@@ -9,10 +9,8 @@ defmodule ChunkFix.Protocol do
 
       0 ->
         <<timestamp::64, chunk_packet::binary>> = payload
-        <<cx::32, cz::32, _::binary>> = chunk_packet
-        pos = {:chunk_pos, cx, cz}
-        Logger.debug("received chunk at #{inspect pos} of size #{inspect(byte_size chunk_packet)}, created #{inspect timestamp}")
-        ChunkFix.ChunkStorage.store(pos, chunk_packet)
+        <<pos_long::64, _::binary>> = chunk_packet
+        ChunkFix.ChunkStorage.store(pos_long, chunk_packet)
         :ok
 
       1 ->
@@ -20,13 +18,20 @@ defmodule ChunkFix.Protocol do
         :ok
 
       2 ->
-        # TODO ChunkFix.ChunkStorage.lookup()
-        :ok
+        positions = for << <<pos_long::64>> <- payload >>, do: pos_long
+        respond_chunks(positions, client_sock)
 
       p_type ->
         Logger.debug "unknown packet type #{p_type} with #{byte_size payload} bytes payload"
 
     end
+  end
+
+  defp respond_chunks([], _client_sock), do: :ok
+  defp respond_chunks([pos_long | positions], client_sock) do
+    chunk_packet = ChunkFix.ChunkStorage.retrieve(pos_long)
+    with :ok <- :gen_tcp.send(client_sock, <<0::8, chunk_packet>>),
+      do: respond_chunks(positions, client_sock)
   end
 
 end
