@@ -10,7 +10,7 @@ defmodule ChunkFix.Server do
 
   def listen_loop(server_sock) do
     {:ok, client_sock} = :gen_tcp.accept(server_sock)
-    {:ok, pid} = Task.Supervisor.start_child(ChunkFix.Server.Supervisor, fn -> serve(client_sock) end)
+    {:ok, _pid} = Task.Supervisor.start_child(ChunkFix.Server.Supervisor, fn -> serve(client_sock) end)
     __MODULE__.listen_loop(server_sock)
   end
 
@@ -18,8 +18,12 @@ defmodule ChunkFix.Server do
     :gen_tcp.controlling_process(client_sock, self())
     {:ok, remote} = :inet.peername(client_sock)
     Logger.debug "New connection from #{inspect remote}"
-    result = serve_loop(client_sock)
-    Logger.debug "Connection closed at #{inspect remote} with #{inspect result}"
+    try do
+      result = serve_loop(client_sock)
+      Logger.debug "Connection closed at #{inspect remote} with #{inspect result}"
+    after
+      :gen_tcp.close client_sock
+    end
   end
 
   def serve_loop(client_sock) do
