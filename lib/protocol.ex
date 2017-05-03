@@ -9,7 +9,8 @@ defmodule ChunkFix.Protocol do
 
       0 ->
         <<timestamp::64, chunk_packet::binary>> = payload
-        <<pos_long::64, _::binary>> = chunk_packet
+        <<pos_long::binary-8, _::binary>> = chunk_packet
+
         ChunkFix.ChunkStorage.store(pos_long, chunk_packet)
         :ok
 
@@ -18,7 +19,7 @@ defmodule ChunkFix.Protocol do
         :ok
 
       2 ->
-        positions = for << <<pos_long::64>> <- payload >>, do: pos_long
+        positions = for << <<pos_long::binary-8>> <- payload >>, do: pos_long
         respond_chunks(positions, client_sock)
 
       p_type ->
@@ -30,8 +31,13 @@ defmodule ChunkFix.Protocol do
   defp respond_chunks([], _client_sock), do: :ok
   defp respond_chunks([pos_long | positions], client_sock) do
     chunk_packet = ChunkFix.ChunkStorage.retrieve(pos_long)
-    with :ok <- :gen_tcp.send(client_sock, <<0::8, chunk_packet>>),
+    with :ok <- :gen_tcp.send(client_sock, <<0::8, chunk_packet::binary>>),
       do: respond_chunks(positions, client_sock)
+  end
+
+  def nice_pos(pos_long) do
+    <<cx::32-signed, cz::32-signed>> = pos_long
+    {cx, cz}
   end
 
 end
