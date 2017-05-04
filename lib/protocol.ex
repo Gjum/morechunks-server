@@ -31,8 +31,12 @@ defmodule ChunkFix.Protocol do
   defp respond_chunks([], _client_sock), do: :ok
   defp respond_chunks([pos_long | positions], client_sock) do
     chunk_packet = ChunkFix.ChunkStorage.retrieve(pos_long)
-    with :ok <- :gen_tcp.send(client_sock, <<0::8, chunk_packet::binary>>),
-      do: respond_chunks(positions, client_sock)
+    case chunk_packet do
+      "" -> respond_chunks(positions, client_sock)
+      chunk_packet ->
+        with :ok <- :gen_tcp.send(client_sock, <<0::8, chunk_packet::binary>>),
+          do: respond_chunks(positions, client_sock)
+    end
   end
 
   def nice_pos(pos_long) do
