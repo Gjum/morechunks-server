@@ -43,23 +43,23 @@ defmodule ChunkFix.ChunkStorage do
   end
 
   def handle_cast({:store, position, packet_data}, storage) do
-    {old_packet, storage} = Map.get_and_update(storage, position, packet_data)
+    {old_packet, storage} = Map.get_and_update(storage, position, fn old_packet -> {old_packet, packet_data} end)
     if old_packet == nil do
-      Logger.info "Storing new chunk at #{inspect ChunkFix.Protocol.nice_pos position}, size: #{inspect byte_size packet_data}"
+      ChunkFix.Metrics.chunk_creation(position, byte_size(packet_data))
     else
-      if byte_size(packet_data) != byte_size(old_packet) do
-        Logger.info "Replacing chunk at #{inspect ChunkFix.Protocol.nice_pos position}, new size: #{inspect byte_size packet_data}, was: #{inspect byte_size old_packet}"
-      else
-        Logger.info "Replacing chunk at #{inspect ChunkFix.Protocol.nice_pos position}, same size: #{inspect byte_size packet_data}"
-      end
+      ChunkFix.Metrics.chunk_update(position, byte_size(packet_data), byte_size(old_packet))
     end
     {:noreply, storage}
   end
 
   def handle_call({:retrieve, position}, _from, storage) do
     chunk = case Map.fetch(storage, position) do
-      {:ok, chunk} -> chunk
-      :error -> "" # TODO get from disk
+      {:ok, chunk} ->
+        ChunkFix.Metrics.chunk_lookup_hit(position)
+        chunk
+      :error ->
+        ChunkFix.Metrics.chunk_lookup_miss(position)
+        "" # TODO get from disk
     end
     {:reply, chunk, storage}
   end

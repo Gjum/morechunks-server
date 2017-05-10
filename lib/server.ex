@@ -16,24 +16,26 @@ defmodule ChunkFix.Server do
 
   def serve(client_sock) do
     {:ok, remote} = :inet.peername(client_sock)
-    Logger.debug "New connection from #{inspect remote}"
+    ChunkFix.Metrics.user_connected(remote)
     try do
-      result = serve_loop(client_sock)
-      Logger.debug "Connection closed at #{inspect remote} with #{inspect result}"
+      result = serve_loop(client_sock, remote)
+      ChunkFix.Metrics.user_closed(remote, result)
     after # handler failed
       :gen_tcp.close client_sock
+      ChunkFix.Metrics.user_finished(remote)
     end
   end
 
-  def serve_loop(client_sock) do
+  def serve_loop(client_sock, remote) do
     with {:ok, data} <- :gen_tcp.recv(client_sock, 0) do
-      case ChunkFix.Protocol.handle_packet(data, client_sock) do
+      case ChunkFix.Protocol.handle_packet(data, client_sock, remote) do
         disco = {:error, :closed} ->
           disco
         :ok ->
-          __MODULE__.serve_loop(client_sock)
+          __MODULE__.serve_loop(client_sock, remote)
         error ->
-          __MODULE__.serve_loop(client_sock)
+          ChunkFix.Metrics.handler_error(remote, error)
+          __MODULE__.serve_loop(client_sock, remote)
       end
     end
   end
