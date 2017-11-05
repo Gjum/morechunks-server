@@ -31,6 +31,10 @@ defmodule ChunkFix.ChunkStorage do
     GenServer.call(__MODULE__, {:retrieve, position})
   end
 
+  def get_stored() do
+    GenServer.call(__MODULE__, :get_stored)
+  end
+
   ## Server Callbacks
 
   def init(args) do
@@ -62,6 +66,13 @@ defmodule ChunkFix.ChunkStorage do
         "" # TODO get from disk
     end
     {:reply, chunk, storage}
+  end
+
+  def handle_call(:get_stored, _from, storage) do
+    positions =
+      Map.keys(storage)
+      |> Enum.map(&ChunkFix.nice_pos/1)
+    {:reply, positions, storage}
   end
 
 end
