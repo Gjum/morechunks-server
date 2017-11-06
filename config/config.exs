@@ -10,11 +10,11 @@ use Mix.Config
 
 # You can configure for your application as:
 #
-#     config :chunkfix, key: :value
+#     config :morechunks, key: :value
 #
 # And access this configuration in your application as:
 #
-#     Application.get_env(:chunkfix, :key)
+#     Application.get_env(:MoreChunks, :key)
 #
 # Or configure a 3rd-party app:
 #

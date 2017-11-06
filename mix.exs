@@ -1,8 +1,8 @@
-defmodule ChunkFix.Mixfile do
+defmodule MoreChunks.Mixfile do
   use Mix.Project
 
   def project do
-    [ app: :chunkfix,
+    [ app: :morechunks,
       version: "0.1.0",
       elixir: "~> 1.4",
       build_embedded: Mix.env == :prod,
@@ -13,7 +13,7 @@ defmodule ChunkFix.Mixfile do
 
   def application do
     [ extra_applications: [:logger],
-      mod: {ChunkFix, []},
+      mod: {MoreChunks, []},
     ]
   end
 

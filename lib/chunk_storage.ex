@@ -1,4 +1,4 @@
-defmodule ChunkFix.ChunkStorage do
+defmodule MoreChunks.ChunkStorage do
   use GenServer
 
   require Logger
@@ -49,9 +49,9 @@ defmodule ChunkFix.ChunkStorage do
   def handle_cast({:store, position, packet_data}, storage) do
     {old_packet, storage} = Map.get_and_update(storage, position, fn old_packet -> {old_packet, packet_data} end)
     if old_packet == nil do
-      ChunkFix.Metrics.chunk_creation(position, byte_size(packet_data))
+      MoreChunks.Metrics.chunk_creation(position, byte_size(packet_data))
     else
-      ChunkFix.Metrics.chunk_update(position, byte_size(packet_data), byte_size(old_packet))
+      MoreChunks.Metrics.chunk_update(position, byte_size(packet_data), byte_size(old_packet))
     end
     {:noreply, storage}
   end
@@ -59,10 +59,10 @@ defmodule ChunkFix.ChunkStorage do
   def handle_call({:retrieve, position}, _from, storage) do
     chunk = case Map.fetch(storage, position) do
       {:ok, chunk} ->
-        ChunkFix.Metrics.chunk_lookup_hit(position)
+        MoreChunks.Metrics.chunk_lookup_hit(position)
         chunk
       :error ->
-        ChunkFix.Metrics.chunk_lookup_miss(position)
+        MoreChunks.Metrics.chunk_lookup_miss(position)
         "" # TODO get from disk
     end
     {:reply, chunk, storage}
@@ -71,8 +71,8 @@ defmodule ChunkFix.ChunkStorage do
   def handle_call(:get_stored, _from, storage) do
     positions =
       Map.keys(storage)
-      |> Enum.map(&ChunkFix.nice_pos/1)
+      |> Enum.map(&MoreChunks.nice_pos/1)
+
     {:reply, positions, storage}
   end
-
 end

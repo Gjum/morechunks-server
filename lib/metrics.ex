@@ -1,4 +1,4 @@
-defmodule ChunkFix.Metrics do
+defmodule MoreChunks.Metrics do
   use GenServer
 
   require Logger
@@ -7,6 +7,10 @@ defmodule ChunkFix.Metrics do
 
   def start_link() do
     GenServer.start_link(__MODULE__, [], [name: __MODULE__])
+  end
+
+  def chunk_creation_invalid(position, packet_size) do
+    GenServer.cast(__MODULE__, {:chunk_creation_invalid, position, packet_size})
   end
 
   def chunk_creation(position, packet_size) do
@@ -71,17 +75,22 @@ defmodule ChunkFix.Metrics do
 
   ###### chunk storage
 
+  def handle_cast({:chunk_creation_invalid, position, packet_size}, state) do
+    Logger.debug "Ignoring invalid new chunk at #{inspect MoreChunks.nice_pos position}, size: #{inspect packet_size}"
+    {:noreply, state}
+  end
+
   def handle_cast({:chunk_creation, position, packet_size}, state) do
-    Logger.debug "Storing new chunk at #{inspect ChunkFix.nice_pos position}, size: #{inspect packet_size}"
+    Logger.debug "Storing new chunk at #{inspect MoreChunks.nice_pos position}, size: #{inspect packet_size}"
     {:noreply, state}
   end
 
   def handle_cast({:chunk_update, position, packet_size, old_packet_size}, state) do
-    if packet_size != old_packet_size do
-      Logger.debug "Replacing chunk at #{inspect ChunkFix.nice_pos position}, new size: #{inspect packet_size}, was: #{inspect old_packet_size}"
-    else
-      Logger.debug "Replacing chunk at #{inspect ChunkFix.nice_pos position}, same size: #{inspect packet_size}"
-    end
+    # if packet_size != old_packet_size do
+    #   Logger.debug "Replacing chunk at #{inspect MoreChunks.nice_pos position}, new size: #{inspect packet_size}, was: #{inspect old_packet_size}"
+    # else
+    #   Logger.debug "Replacing chunk at #{inspect MoreChunks.nice_pos position}, same size: #{inspect packet_size}"
+    # end
     {:noreply, state}
   end
 
@@ -104,7 +113,7 @@ defmodule ChunkFix.Metrics do
   end
 
   def handle_cast({:user_request, remote, positions}, state) do
-    Logger.debug("received request for #{length positions} chunks from #{inspect remote}")
+    Logger.debug("received request for #{length positions} chunks at #{inspect Enum.map(positions, &MoreChunks.nice_pos/1)}")
     {:noreply, state}
   end
 
