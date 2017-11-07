@@ -2,24 +2,26 @@ defmodule MoreChunks do
   use Application
 
   def start(_type, _args) do
-    import Supervisor.Spec, warn: false
+    import Supervisor.Spec
 
-    listen_port = 12312 # TODO get from args
+    listen_ip = Application.get_env(:morechunks, :listen_ip, {127, 0, 0, 1})
+    listen_port = Application.get_env(:morechunks, :listen_port, 12312)
 
     children = [
       worker(MoreChunks.Metrics, []),
       worker(MoreChunks.ChunkStorage, []),
-      supervisor(Task.Supervisor, [[name: MoreChunks.Server.Supervisor]]),
-      worker(Task, [MoreChunks.Server, :listen, [listen_port]]),
+      worker(MoreChunks.Server, [listen_ip, listen_port])
     ]
 
-    opts = [strategy: :one_for_one, name: MoreChunks.Supervisor]
-    Supervisor.start_link(children, opts)
+    Supervisor.start_link(
+      children,
+      strategy: :one_for_one,
+      name: MoreChunks.Supervisor
+    )
   end
 
   def nice_pos(pos_long) do
     <<cx::32-signed, cz::32-signed>> = pos_long
     {cx, cz}
   end
-
 end

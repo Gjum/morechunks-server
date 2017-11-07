@@ -41,20 +41,24 @@ defmodule MoreChunks.Metrics do
     GenServer.cast(__MODULE__, {:user_request, remote, positions})
   end
 
-  def user_info(remote, payload) do
-    GenServer.cast(__MODULE__, {:user_info, remote, payload})
+  def user_set_chunks_per_second(remote, chunks_per_second) do
+    GenServer.cast(__MODULE__, {:user_set_chunks_per_second, remote, chunks_per_second})
+  end
+
+  def user_info_unknown(remote, payload) do
+    GenServer.cast(__MODULE__, {:user_info_unknown, remote, payload})
   end
 
   def user_connected(remote) do
     GenServer.cast(__MODULE__, {:user_connected, remote})
   end
 
-  def user_closed(remote, result) do
-    GenServer.cast(__MODULE__, {:user_closed, remote, result})
+  def user_closed(remote) do
+    GenServer.cast(__MODULE__, {:user_closed, remote})
   end
 
-  def user_finished(remote) do
-    GenServer.cast(__MODULE__, {:user_finished, remote})
+  def user_connection_error(remote, result) do
+    GenServer.cast(__MODULE__, {:user_connection_error, remote, result})
   end
 
   def handler_error(remote, error) do
@@ -113,12 +117,17 @@ defmodule MoreChunks.Metrics do
   end
 
   def handle_cast({:user_request, remote, positions}, state) do
-    Logger.debug("received request for #{length positions} chunks at #{inspect Enum.map(positions, &MoreChunks.nice_pos/1)}")
+    Logger.debug("Received request for #{length positions} chunks at #{inspect Enum.map(positions, &MoreChunks.nice_pos/1)}")
     {:noreply, state}
   end
 
-  def handle_cast({:user_info, remote, payload}, state) do
-    Logger.info("received info: #{payload}")
+  def handle_cast({:user_set_chunks_per_second, remote, chunks_per_second}, state) do
+    Logger.debug("Received chunks_per_second: #{chunks_per_second}")
+    {:noreply, state}
+  end
+
+  def handle_cast({:user_info_unknown, remote, payload}, state) do
+    Logger.warn("Received unknown info: #{payload}")
     {:noreply, state}
   end
 
@@ -129,17 +138,18 @@ defmodule MoreChunks.Metrics do
     {:noreply, state}
   end
 
-  def handle_cast({:user_closed, remote, result}, state) do
-    Logger.debug "Connection closed at #{inspect remote} with #{inspect result}"
+  def handle_cast({:user_closed, remote}, state) do
+    Logger.debug "Connection closed at #{inspect remote}"
     {:noreply, state}
   end
 
-  def handle_cast({:user_finished, remote}, state) do
+  def handle_cast({:user_connection_error, remote, result}, state) do
+    Logger.debug "Connection error at #{inspect remote} with #{inspect result}"
     {:noreply, state}
   end
 
   def handle_cast({:handler_error, remote, error}, state) do
-    Logger.debug "error handling packet from #{inspect remote}: #{inspect error}"
+    Logger.debug "Error handling packet from #{inspect remote}: #{inspect error}"
     {:noreply, state}
   end
 

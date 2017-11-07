@@ -1,43 +1,56 @@
 defmodule MoreChunks.Server do
-  require Logger
+  use Task, restart: :permanent, id: __MODULE__
 
-  def listen(port) do
-    Process.register(self(), __MODULE__) # give this process a name
-    Logger.info "starting tcp server at port #{inspect port}"
-    {:ok, server_sock} = :gen_tcp.listen(port, [mode: :binary, packet: 4, active: false, reuseaddr: true])
-    listen_loop(server_sock)
+  def start_link(ip, port) do
+    Task.start_link(__MODULE__, :init, [ip, port])
   end
 
-  def listen_loop(server_sock) do
-    {:ok, client_sock} = :gen_tcp.accept(server_sock)
-    {:ok, _pid} = Task.Supervisor.start_child(MoreChunks.Server.Supervisor, fn -> __MODULE__.serve(client_sock) end)
-    __MODULE__.listen_loop(server_sock)
+  def get_client_pids() do
+    Supervisor.which_children(MoreChunks.Server.ClientSupervisor)
+    |> Enum.map(&elem(&1, 1))
   end
 
-  def serve(client_sock) do
-    {:ok, remote} = :inet.peername(client_sock)
-    MoreChunks.Metrics.user_connected(remote)
-    try do
-      result = serve_loop(client_sock, remote)
-      MoreChunks.Metrics.user_closed(remote, result)
-    after # handler failed
-      :gen_tcp.close client_sock
-      MoreChunks.Metrics.user_finished(remote)
-    end
+  def init(ip, port) do
+    Process.register(self(), __MODULE__)
+
+    {:ok, listen_socket} =
+      :gen_tcp.listen(
+        port,
+        ip: ip,
+        mode: :binary,
+        packet: 4,
+        active: false,
+        reuseaddr: true
+      )
+
+    {:ok, sup_pid} = start_clients_supervisor()
+
+    listen_loop(listen_socket, sup_pid)
   end
 
-  def serve_loop(client_sock, remote) do
-    with {:ok, data} <- :gen_tcp.recv(client_sock, 0) do
-      case MoreChunks.Protocol.handle_packet(data, client_sock, remote) do
-        closed_error = {:error, :closed} ->
-          closed_error
-        :ok ->
-          __MODULE__.serve_loop(client_sock, remote)
-        error ->
-          MoreChunks.Metrics.handler_error(remote, error)
-          __MODULE__.serve_loop(client_sock, remote)
-      end
-    end
+  def listen_loop(listen_socket, sup_pid) do
+    {:ok, client_socket} = :gen_tcp.accept(listen_socket)
+
+    {:ok, client} = Supervisor.start_child(sup_pid, [client_socket])
+    :gen_tcp.controlling_process(client_socket, client)
+
+    __MODULE__.listen_loop(listen_socket, sup_pid)
   end
 
+  def start_clients_supervisor() do
+    import Supervisor.Spec
+
+    children = [
+      worker(MoreChunks.Client, [], restart: :temporary)
+    ]
+
+    # We start a supervisor with a simple one for one strategy.
+    # The clients won't be started now but later on,
+    # see Supervisor.start_child above.
+    Supervisor.start_link(
+      children,
+      strategy: :simple_one_for_one,
+      name: MoreChunks.Server.ClientSupervisor
+    )
+  end
 end
