@@ -5,11 +5,6 @@ defmodule MoreChunks.Server do
     Task.start_link(__MODULE__, :init, [ip, port])
   end
 
-  def get_client_pids() do
-    Supervisor.which_children(MoreChunks.Server.ClientSupervisor)
-    |> Enum.map(&elem(&1, 1))
-  end
-
   def init(ip, port) do
     Process.register(self(), __MODULE__)
 
@@ -23,34 +18,15 @@ defmodule MoreChunks.Server do
         reuseaddr: true
       )
 
-    {:ok, sup_pid} = start_clients_supervisor()
-
-    listen_loop(listen_socket, sup_pid)
+    listen_loop(listen_socket)
   end
 
-  def listen_loop(listen_socket, sup_pid) do
+  def listen_loop(listen_socket) do
     {:ok, client_socket} = :gen_tcp.accept(listen_socket)
 
-    {:ok, client} = Supervisor.start_child(sup_pid, [client_socket])
+    {:ok, client} = Supervisor.start_child(MoreChunks.ClientSupervisor, [client_socket])
     :gen_tcp.controlling_process(client_socket, client)
 
-    __MODULE__.listen_loop(listen_socket, sup_pid)
-  end
-
-  def start_clients_supervisor() do
-    import Supervisor.Spec
-
-    children = [
-      worker(MoreChunks.Client, [], restart: :temporary)
-    ]
-
-    # We start a supervisor with a simple one for one strategy.
-    # The clients won't be started now but later on,
-    # see Supervisor.start_child above.
-    Supervisor.start_link(
-      children,
-      strategy: :simple_one_for_one,
-      name: MoreChunks.Server.ClientSupervisor
-    )
+    __MODULE__.listen_loop(listen_socket)
   end
 end

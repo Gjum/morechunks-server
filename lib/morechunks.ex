@@ -10,6 +10,7 @@ defmodule MoreChunks do
     children = [
       worker(MoreChunks.Metrics, []),
       worker(MoreChunks.ChunkStorage, []),
+      supervisor(MoreChunks.ClientSupervisor, []),
       worker(MoreChunks.Server, [listen_ip, listen_port])
     ]
 
