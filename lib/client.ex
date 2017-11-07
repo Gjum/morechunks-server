@@ -31,11 +31,14 @@ defmodule MoreChunks.Client do
   defp handle_packet(0, payload, state) do
     %{remote: remote} = state
 
-    <<timestamp::64, chunk_packet::binary>> = payload
-    <<pos_long::binary-8, _::binary>> = chunk_packet
-    MoreChunks.Metrics.user_contributed_chunk(remote, pos_long, byte_size(chunk_packet))
-
-    MoreChunks.ChunkStorage.store(pos_long, chunk_packet)
+    with <<timestamp::64, chunk_packet::binary>> <- payload,
+         <<pos_long::binary-8, _::binary>> <- chunk_packet do
+      MoreChunks.ChunkStorage.store(pos_long, chunk_packet)
+      MoreChunks.Metrics.user_contributed_chunk(remote, pos_long, byte_size(chunk_packet))
+    else
+      err ->
+        MoreChunks.Metrics.user_connection_error(remote, {:invalid_chunk, err, payload})
+    end
 
     state
   end
@@ -46,10 +49,19 @@ defmodule MoreChunks.Client do
 
     case payload do
       <<"mod.chunksPerSecond=", val::bytes>> ->
-        {chunks_per_second, ""} = :string.to_integer(val)
-        MoreChunks.Metrics.user_set_chunks_per_second(remote, chunks_per_second)
+        with {chunks_per_second, ""} <- :string.to_integer(val) do
+          MoreChunks.Metrics.user_set_chunks_per_second(remote, chunks_per_second)
 
-        %{state | chunks_per_second: chunks_per_second}
+          %{state | chunks_per_second: chunks_per_second}
+        else
+          {:error, :badarg} ->
+            MoreChunks.Metrics.user_connection_error(
+              remote,
+              {:invalid_chunks_per_second, payload}
+            )
+
+            state
+        end
 
       unknown_payload ->
         MoreChunks.Metrics.user_info_unknown(remote, unknown_payload)
