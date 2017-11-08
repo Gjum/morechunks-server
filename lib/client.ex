@@ -91,7 +91,7 @@ defmodule MoreChunks.Client do
     chunk_packet = MoreChunks.ChunkStorage.retrieve(pos_long)
 
     case chunk_packet do
-      "" ->
+      nil ->
         # skip unknown chunk
         send_next_chunk(%{state | chunks_request: remaining_positions})
 
