@@ -46,6 +46,20 @@ defmodule MoreChunks.Client do
   # info message
   defp handle_packet(1, payload, state) do
     case payload do
+      "game.dimension=0" ->
+        # valid dimension
+        state
+
+      <<"game.dimension=", invalid_dimension::bytes>> ->
+        response = "error.invalid_dimension " <> invalid_dimension
+        :ok = :gen_tcp.send(state.socket, <<1::8, response::binary>>)
+        MoreChunks.Metrics.cast([:invalid_dimension, invalid_dimension], state.remote)
+
+        # the client should disconnect upon receiving the response,
+        # this is so clients that don't understand the response don't auto-reconnect
+        Process.sleep(60_000)
+        exit({:shutdown, {:client_error, {:invalid_dimension, invalid_dimension}}})
+
       <<"mod.chunksPerSecond=", val::bytes>> ->
         with {chunks_per_second, ""} <- :string.to_integer(val) do
           MoreChunks.Metrics.cast([:user_set_chunks_per_second, chunks_per_second], state.remote)
@@ -107,13 +121,15 @@ defmodule MoreChunks.Client do
     end
   end
 
+  # GenServer handlers
+
   def handle_info({:tcp, socket, packet_data}, state) do
+    <<p_type::8, payload::binary>> = packet_data
+    state = handle_packet(p_type, payload, state)
+
     # only receive the single next packet,
     # to prevent swamping the inbox with tcp messages
     :inet.setopts(socket, active: :once)
-
-    <<p_type::8, payload::binary>> = packet_data
-    state = handle_packet(p_type, payload, state)
 
     {:noreply, state}
   end
