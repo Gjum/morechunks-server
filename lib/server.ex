@@ -7,6 +7,7 @@ defmodule MoreChunks.Server do
 
   def init(ip, port) do
     Process.register(self(), __MODULE__)
+    MoreChunks.Metrics.cast([:start_module, __MODULE__])
 
     {:ok, listen_socket} =
       :gen_tcp.listen(

@@ -38,8 +38,8 @@ defmodule MoreChunks.ChunkStorage do
 
   ## Server Callbacks
 
-  def init(args) do
-    Logger.info("Starting #{__MODULE__}, args: #{inspect(args)}")
+  def init(_args) do
+    MoreChunks.Metrics.cast([:start_module, __MODULE__])
     {:ok, %{}}
   end
 
