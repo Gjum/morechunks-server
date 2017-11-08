@@ -21,8 +21,6 @@ defmodule MoreChunks do
     )
   end
 
-  def nice_pos(pos_long) do
-    <<cx::32-signed, cz::32-signed>> = pos_long
-    {cx, cz}
-  end
+  def nice_pos(<<cx::32-signed, cz::32-signed>>), do: {cx, cz}
+  def nice_pos(pos = {_x, _z}), do: pos
 end

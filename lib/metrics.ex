@@ -6,151 +6,93 @@ defmodule MoreChunks.Metrics do
   ## Client API
 
   def start_link() do
-    GenServer.start_link(__MODULE__, [], [name: __MODULE__])
+    GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
-  def chunk_creation_invalid(position, packet_size) do
-    GenServer.cast(__MODULE__, {:chunk_creation_invalid, position, packet_size})
+  @ignored_metrics MapSet.new([
+                     :chunk_update
+                   ])
+
+  def cast(metric_list) do
+    unless @ignored_metrics |> MapSet.member?(hd(metric_list)) do
+      GenServer.cast(__MODULE__, {:metric, metric_list})
+    end
   end
 
-  def chunk_creation(position, packet_size) do
-    GenServer.cast(__MODULE__, {:chunk_creation, position, packet_size})
-  end
-
-  def chunk_update(position, packet_size, old_packet_size) do
-    GenServer.cast(__MODULE__, {:chunk_update, position, packet_size, old_packet_size})
-  end
-
-  def chunk_lookup_hit(position) do
-    GenServer.cast(__MODULE__, {:chunk_lookup_hit, position})
-  end
-
-  def chunk_lookup_miss(position) do
-    GenServer.cast(__MODULE__, {:chunk_lookup_miss, position})
-  end
-
-  def user_contributed_chunk(remote, pos_long, packet_size) do
-    GenServer.cast(__MODULE__, {:user_contributed_chunk, remote, pos_long, packet_size})
-  end
-
-  def sent_chunk(remote, pos_long) do
-    GenServer.cast(__MODULE__, {:sent_chunk, remote, pos_long})
-  end
-
-  def user_request(remote, positions) do
-    GenServer.cast(__MODULE__, {:user_request, remote, positions})
-  end
-
-  def user_set_chunks_per_second(remote, chunks_per_second) do
-    GenServer.cast(__MODULE__, {:user_set_chunks_per_second, remote, chunks_per_second})
-  end
-
-  def user_info_unknown(remote, payload) do
-    GenServer.cast(__MODULE__, {:user_info_unknown, remote, payload})
-  end
-
-  def user_connected(remote) do
-    GenServer.cast(__MODULE__, {:user_connected, remote})
-  end
-
-  def user_closed(remote) do
-    GenServer.cast(__MODULE__, {:user_closed, remote})
-  end
-
-  def user_connection_error(remote, result) do
-    GenServer.cast(__MODULE__, {:user_connection_error, remote, result})
-  end
-
-  def handler_error(remote, error) do
-    GenServer.cast(__MODULE__, {:handler_error, remote, error})
+  def cast(metric_list, remote) do
+    unless @ignored_metrics |> MapSet.member?(hd(metric_list)) do
+      GenServer.cast(__MODULE__, {:metric, metric_list, remote})
+    end
   end
 
   ## Server Callbacks
 
   def init(args) do
-    Logger.info "Starting Metrics, args: #{inspect args}"
-    {:ok, %{
-    }}
-  end
-
-  def terminate(reason, _state) do
-    Logger.warn "Terminating Metrics, reason: #{inspect reason}"
+    Logger.info("Starting #{__MODULE__}, args: #{inspect(args)}")
+    {:ok, %{}}
   end
 
   ###### chunk storage
 
-  def handle_cast({:chunk_creation_invalid, position, packet_size}, state) do
-    Logger.debug "Ignoring invalid new chunk at #{inspect MoreChunks.nice_pos position}, size: #{inspect packet_size}"
+  def handle_cast({:metric, [:chunk_creation, position, packet_size]}, state) do
+    pos = inspect(MoreChunks.nice_pos(position))
+    Logger.debug("Storing new chunk at #{pos}, size: #{inspect(packet_size)}")
+
     {:noreply, state}
   end
 
-  def handle_cast({:chunk_creation, position, packet_size}, state) do
-    Logger.debug "Storing new chunk at #{inspect MoreChunks.nice_pos position}, size: #{inspect packet_size}"
-    {:noreply, state}
-  end
+  def handle_cast({:metric, [:chunk_load_error, position, error]}, state) do
+    pos = inspect(MoreChunks.nice_pos(position))
+    Logger.debug("Loading chunk at #{pos} failed: #{inspect(error)}")
 
-  def handle_cast({:chunk_update, position, packet_size, old_packet_size}, state) do
-    # if packet_size != old_packet_size do
-    #   Logger.debug "Replacing chunk at #{inspect MoreChunks.nice_pos position}, new size: #{inspect packet_size}, was: #{inspect old_packet_size}"
-    # else
-    #   Logger.debug "Replacing chunk at #{inspect MoreChunks.nice_pos position}, same size: #{inspect packet_size}"
-    # end
-    {:noreply, state}
-  end
-
-  def handle_cast({:chunk_lookup_hit, position}, state) do
-    {:noreply, state}
-  end
-
-  def handle_cast({:chunk_lookup_miss, position}, state) do
     {:noreply, state}
   end
 
   ###### protocol
 
-  def handle_cast({:user_contributed_chunk, remote, pos_long, packet_size}, state) do
+  def handle_cast({:metric, _remote, [:user_request, positions_long]}, state) do
+    positions = Enum.map(positions_long, &MoreChunks.nice_pos/1)
+    Logger.debug("Received request for #{length(positions)} chunks at #{positions}")
+
     {:noreply, state}
   end
 
-  def handle_cast({:sent_chunk, remote, pos_long}, state) do
-    {:noreply, state}
-  end
-
-  def handle_cast({:user_request, remote, positions}, state) do
-    Logger.debug("Received request for #{length positions} chunks at #{inspect Enum.map(positions, &MoreChunks.nice_pos/1)}")
-    {:noreply, state}
-  end
-
-  def handle_cast({:user_set_chunks_per_second, remote, chunks_per_second}, state) do
+  def handle_cast({:metric, _remote, [:user_set_chunks_per_second, chunks_per_second]}, state) do
     Logger.debug("Received chunks_per_second: #{chunks_per_second}")
     {:noreply, state}
   end
 
-  def handle_cast({:user_info_unknown, remote, payload}, state) do
+  def handle_cast({:metric, _remote, [:user_info_unknown, payload]}, state) do
     Logger.warn("Received unknown info: #{payload}")
     {:noreply, state}
   end
 
   ###### user connection status
 
-  def handle_cast({:user_connected, remote}, state) do
-    Logger.debug "New connection from #{inspect remote}"
+  def handle_cast({:metric, [:user_connected], remote}, state) do
+    Logger.debug("New connection from #{inspect(remote)}")
     {:noreply, state}
   end
 
-  def handle_cast({:user_closed, remote}, state) do
-    Logger.debug "Connection closed at #{inspect remote}"
+  def handle_cast({:metric, [:user_closed], remote}, state) do
+    Logger.debug("Connection closed at #{inspect(remote)}")
     {:noreply, state}
   end
 
-  def handle_cast({:user_connection_error, remote, result}, state) do
-    Logger.debug "Connection error at #{inspect remote} with #{inspect result}"
+  def handle_cast({:metric, [:handler_error, error], remote}, state) do
+    Logger.debug("Error handling packet from #{inspect(remote)}: #{inspect(error)}")
     {:noreply, state}
   end
 
-  def handle_cast({:handler_error, remote, error}, state) do
-    Logger.debug "Error handling packet from #{inspect remote}: #{inspect error}"
+  ###### unknown metrics
+
+  def handle_cast({:metric, metric_list}, state) do
+    Logger.warn("Unknown metric #{inspect(metric_list)}")
     {:noreply, state}
   end
 
+  def handle_cast({:metric, metric_list, remote}, state) do
+    Logger.warn("Unknown client metric #{inspect(metric_list)} for #{inspect(remote)}")
+    {:noreply, state}
+  end
 end

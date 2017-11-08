@@ -16,7 +16,7 @@ defmodule MoreChunks.Client do
     # ie. in handle_info({:tcp, ...}, ...)
     :inet.setopts(socket, active: :once)
 
-    MoreChunks.Metrics.user_connected(remote)
+    MoreChunks.Metrics.cast([:user_connected], remote)
 
     {:ok, %{
       remote: remote,
@@ -29,15 +29,15 @@ defmodule MoreChunks.Client do
 
   # chunk
   defp handle_packet(0, payload, state) do
-    %{remote: remote} = state
-
     with <<timestamp::64, chunk_packet::binary>> <- payload,
          <<pos_long::binary-8, _::binary>> <- chunk_packet do
       MoreChunks.ChunkStorage.store(pos_long, chunk_packet)
-      MoreChunks.Metrics.user_contributed_chunk(remote, pos_long, byte_size(chunk_packet))
+
+      packet_size = byte_size(chunk_packet)
+      MoreChunks.Metrics.cast([:user_contributed_chunk, pos_long, packet_size], state.remote)
     else
       err ->
-        MoreChunks.Metrics.user_connection_error(remote, {:invalid_chunk, err, payload})
+        MoreChunks.Metrics.cast([:invalid_user_chunk, err, payload], state.remote)
     end
 
     state
@@ -45,26 +45,21 @@ defmodule MoreChunks.Client do
 
   # info message
   defp handle_packet(1, payload, state) do
-    %{remote: remote} = state
-
     case payload do
       <<"mod.chunksPerSecond=", val::bytes>> ->
         with {chunks_per_second, ""} <- :string.to_integer(val) do
-          MoreChunks.Metrics.user_set_chunks_per_second(remote, chunks_per_second)
+          MoreChunks.Metrics.cast([:user_set_chunks_per_second, chunks_per_second], state.remote)
 
           %{state | chunks_per_second: chunks_per_second}
         else
           {:error, :badarg} ->
-            MoreChunks.Metrics.user_connection_error(
-              remote,
-              {:invalid_chunks_per_second, payload}
-            )
+            MoreChunks.Metrics.cast([:invalid_chunks_per_second, payload], state.remote)
 
             state
         end
 
       unknown_payload ->
-        MoreChunks.Metrics.user_info_unknown(remote, unknown_payload)
+        MoreChunks.Metrics.cast([:user_info_unknown, unknown_payload], state.remote)
 
         state
     end
@@ -72,25 +67,18 @@ defmodule MoreChunks.Client do
 
   # chunks request
   defp handle_packet(2, payload, state) do
-    %{remote: remote, chunk_send_timer: timer} = state
-
-    if timer != nil do
-      Process.cancel_timer(timer)
+    if state.chunk_send_timer != nil do
+      Process.cancel_timer(state.chunk_send_timer)
     end
 
     positions = for <<(<<pos_long::binary-8>> <- payload)>>, do: pos_long
-    MoreChunks.Metrics.user_request(remote, positions)
+    MoreChunks.Metrics.cast([:user_request, positions], state.remote)
 
-    send_next_chunk(%{state | chunks_request: positions})
+    send_next_chunk(%{state | chunks_request: positions, chunk_send_timer: nil})
   end
 
   defp handle_packet(p_type, payload, state) do
-    %{remote: remote} = state
-
-    MoreChunks.Metrics.user_connection_error(
-      remote,
-      {:unknown_packet_type, p_type, byte_size(payload)}
-    )
+    MoreChunks.Metrics.cast([:unknown_packet_type, p_type, byte_size(payload)], state.remote)
 
     state
   end
@@ -108,14 +96,10 @@ defmodule MoreChunks.Client do
         send_next_chunk(%{state | chunks_request: remaining_positions})
 
       chunk_packet ->
-        %{remote: remote, socket: socket} = state
+        :ok = :gen_tcp.send(state.socket, <<0::8, chunk_packet::binary>>)
+        MoreChunks.Metrics.cast([:sent_chunk, pos_long], state.remote)
 
-        with :ok <- :gen_tcp.send(socket, <<0::8, chunk_packet::binary>>) do
-          MoreChunks.Metrics.sent_chunk(remote, pos_long)
-        end
-
-        %{chunks_per_second: chunks_per_second} = state
-        ms_to_next_chunk_send = div(1000, chunks_per_second)
+        ms_to_next_chunk_send = div(1000, state.chunks_per_second)
 
         timer = Process.send_after(self(), :send_next_chunk, ms_to_next_chunk_send)
 
@@ -134,23 +118,22 @@ defmodule MoreChunks.Client do
     {:noreply, state}
   end
 
-  def handle_info({:tcp_closed, _socket}, %{remote: remote}) do
-    MoreChunks.Metrics.user_closed(remote)
+  def handle_info({:tcp_closed, _socket}, state) do
+    MoreChunks.Metrics.cast([:user_closed], state.remote)
     exit({:shutdown, :tcp_closed})
   end
 
-  def handle_info({:tcp_error, _socket, reason}, %{remote: remote}) do
-    MoreChunks.Metrics.user_connection_error(remote, {:tcp_error, reason})
+  def handle_info({:tcp_error, _socket, error}, state) do
+    MoreChunks.Metrics.cast([:tcp_error, error], state.remote)
     exit({:shutdown, :tcp_error})
   end
 
   def handle_info(:send_next_chunk, state) do
-    state = send_next_chunk(state)
+    state = send_next_chunk(%{state | chunk_send_timer: nil})
     {:noreply, state}
   end
 
   def handle_call(:get_chunks_request, _caller, state) do
-    %{chunks_request: chunks_request} = state
-    {:reply, chunks_request, state}
+    {:reply, state.chunks_request, state}
   end
 end
