@@ -1,6 +1,4 @@
 defmodule MoreChunks.Server do
-  use Task, restart: :permanent, id: __MODULE__
-
   def start_link(ip, port) do
     Task.start_link(__MODULE__, :init, [ip, port])
   end

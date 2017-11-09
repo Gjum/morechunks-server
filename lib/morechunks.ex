@@ -11,7 +11,12 @@ defmodule MoreChunks do
       worker(MoreChunks.Metrics, []),
       worker(MoreChunks.ChunkStorage, []),
       supervisor(MoreChunks.ClientSupervisor, []),
-      worker(MoreChunks.Server, [listen_ip, listen_port])
+      worker(
+        MoreChunks.Server,
+        [listen_ip, listen_port],
+        restart: :permanent,
+        id: MoreChunks.Server
+      )
     ]
 
     Supervisor.start_link(
