@@ -32,6 +32,13 @@ defmodule MoreChunks.Metrics do
     {:ok, %{}}
   end
 
+  ###### internal
+
+  def handle_cast({:metric, [:start_module, module | args]}, state) do
+    Logger.debug("Starting #{module}, args: #{inspect(args)}")
+    {:noreply, state}
+  end
+
   ###### chunk storage
 
   def handle_cast({:metric, [:chunk_creation, position, packet_size]}, state) do
