@@ -9,6 +9,7 @@ listen_port_from_env =
   end
 
 config :morechunks,
+  max_chunks_per_second: 80,
   listen_ip: {127, 0, 0, 1},
   listen_port: listen_port_from_env
 

@@ -113,7 +113,9 @@ defmodule MoreChunks.Client do
         :ok = :gen_tcp.send(state.socket, <<0::8, chunk_packet::binary>>)
         MoreChunks.Metrics.cast([:sent_chunk, pos_long], state.remote)
 
-        ms_to_next_chunk_send = div(1000, state.chunks_per_second)
+        config_chunks_per_second = Application.get_env(:morechunks, :max_chunks_per_second, 80)
+        chunks_per_second = min(state.chunks_per_second, config_chunks_per_second)
+        ms_to_next_chunk_send = div(1000, chunks_per_second)
 
         timer = Process.send_after(self(), :send_next_chunk, ms_to_next_chunk_send)
 
