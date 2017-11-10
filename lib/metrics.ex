@@ -35,7 +35,7 @@ defmodule MoreChunks.Metrics do
   ###### internal
 
   def handle_cast({:metric, [:start_module, module | args]}, state) do
-    Logger.debug("Starting #{module}, args: #{inspect(args)}")
+    Logger.info("Starting #{module}, args: #{inspect(args)}")
     {:noreply, state}
   end
 

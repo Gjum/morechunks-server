@@ -50,12 +50,9 @@ defmodule MoreChunks.ChunkStorage do
     if old_packet == nil do
       MoreChunks.Metrics.cast([:chunk_creation, position, byte_size(chunk_data)])
     else
-      MoreChunks.Metrics.cast([
-        :chunk_update,
-        position,
-        byte_size(chunk_data),
-        byte_size(old_packet)
-      ])
+      bs_old = byte_size(old_packet)
+      bs_new = byte_size(chunk_data)
+      MoreChunks.Metrics.cast([:chunk_update, position, bs_old, bs_new])
     end
 
     spawn_link(fn -> save_chunk(position, chunk_data) end)
