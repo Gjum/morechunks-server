@@ -1,11 +1,14 @@
-# morechunks-server
-Simple TCP server that provides chunks on request and allows clients to update them.
+# MoreChunks Server
+File-backed chunk storage server that provides chunks on request and allows clients to update them.
 
-Install dependencies: `mix deps.get`
+**Looking for the [Client Mod](https://github.com/Gjum/morechunks-forge)?**
 
-Run: `iex -S mix`
+## Installation and Usage
+1. Install dependencies: `mix deps.get`
+1. Configure: edit `config/config.exs`
+1. Run: `iex -S mix`
 
-## Client example
+## Client Example
 Run `iex` and type/paste:
 ```elixir
 # open a connection to the server
