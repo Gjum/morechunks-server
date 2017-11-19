@@ -9,9 +9,16 @@ defmodule MoreChunks.Metrics do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
-  @ignored_metrics MapSet.new([
-                     :chunk_update
-                   ])
+  @ignored_metrics MapSet.new(
+                     Application.get_env(:morechunks, :ignored_metrics, [
+                       :chunk_loaded,
+                       :chunk_lookup_hit,
+                       :chunk_lookup_miss,
+                       :chunk_update,
+                       :sent_chunk,
+                       :user_contributed_chunk
+                     ])
+                   )
 
   def cast(metric_list) do
     unless @ignored_metrics |> MapSet.member?(hd(metric_list)) do
@@ -27,8 +34,8 @@ defmodule MoreChunks.Metrics do
 
   ## Server Callbacks
 
-  def init(args) do
-    Logger.info("Starting #{__MODULE__}, args: #{inspect(args)}")
+  def init(_args) do
+    cast([:start_module, __MODULE__])
     {:ok, %{}}
   end
 
