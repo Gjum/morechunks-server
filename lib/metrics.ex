@@ -49,34 +49,31 @@ defmodule MoreChunks.Metrics do
   ###### chunk storage
 
   def handle_cast({:metric, [:chunk_creation, position, packet_size]}, state) do
-    pos = inspect(MoreChunks.nice_pos(position))
-    Logger.debug("Storing new chunk at #{pos}, size: #{inspect(packet_size)}")
+    Logger.debug("Storing new chunk at #{inspect(position)}, size: #{inspect(packet_size)}")
 
     {:noreply, state}
   end
 
   def handle_cast({:metric, [:chunk_load_error, position, error]}, state) do
-    pos = inspect(MoreChunks.nice_pos(position))
-    Logger.debug("Loading chunk at #{pos} failed: #{inspect(error)}")
+    Logger.debug("Loading chunk at #{inspect(position)} failed: #{inspect(error)}")
 
     {:noreply, state}
   end
 
   ###### protocol
 
-  def handle_cast({:metric, _remote, [:user_request, positions_long]}, state) do
-    positions = Enum.map(positions_long, &MoreChunks.nice_pos/1)
-    Logger.debug("Received request for #{length(positions)} chunks at #{positions}")
+  def handle_cast({:metric, [:user_request, positions], _remote}, state) do
+    Logger.debug("Received request for #{length(positions)} chunks at #{inspect(positions)}")
 
     {:noreply, state}
   end
 
-  def handle_cast({:metric, _remote, [:user_set_chunks_per_second, chunks_per_second]}, state) do
+  def handle_cast({:metric, [:user_set_chunks_per_second, chunks_per_second], _remote}, state) do
     Logger.debug("Received chunks_per_second: #{chunks_per_second}")
     {:noreply, state}
   end
 
-  def handle_cast({:metric, _remote, [:user_info_unknown, payload]}, state) do
+  def handle_cast({:metric, [:user_info_unknown, payload], _remote}, state) do
     Logger.warn("Received unknown info: #{payload}")
     {:noreply, state}
   end

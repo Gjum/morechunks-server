@@ -1,8 +1,6 @@
 defmodule MoreChunks.Client do
   use GenServer
 
-  require Logger
-
   def start_link(socket) do
     GenServer.start_link(__MODULE__, [socket])
   end
@@ -30,11 +28,12 @@ defmodule MoreChunks.Client do
   # chunk
   defp handle_packet(0, payload, state) do
     with <<timestamp::64, chunk_packet::binary>> <- payload,
-         <<pos_long::binary-8, _::binary>> <- chunk_packet do
-      MoreChunks.ChunkStorage.store(pos_long, chunk_packet)
+         <<cx::32-signed, cz::32-signed, _::binary>> <- chunk_packet do
+      pos = {cx, cz}
+      MoreChunks.ChunkStorage.store(pos, chunk_packet)
 
       packet_size = byte_size(chunk_packet)
-      MoreChunks.Metrics.cast([:user_contributed_chunk, pos_long, packet_size], state.remote)
+      MoreChunks.Metrics.cast([:user_contributed_chunk, pos, packet_size], state.remote)
     else
       err ->
         MoreChunks.Metrics.cast([:invalid_user_chunk, err, payload], state.remote)
@@ -47,7 +46,8 @@ defmodule MoreChunks.Client do
   defp handle_packet(1, payload, state) do
     case payload do
       "game.dimension=0" ->
-        # valid dimension
+        MoreChunks.Metrics.cast([:valid_dimension, 0], state.remote)
+
         state
 
       <<"game.dimension=", invalid_dimension::bytes>> ->
@@ -58,6 +58,7 @@ defmodule MoreChunks.Client do
         # the client should disconnect upon receiving the response,
         # this is so clients that don't understand the response don't auto-reconnect
         Process.sleep(60_000)
+
         exit({:shutdown, {:client_error, {:invalid_dimension, invalid_dimension}}})
 
       <<"mod.chunksPerSecond=", val::bytes>> ->
@@ -85,7 +86,7 @@ defmodule MoreChunks.Client do
       Process.cancel_timer(state.chunk_send_timer)
     end
 
-    positions = for <<(<<pos_long::binary-8>> <- payload)>>, do: pos_long
+    positions = for <<(<<cx::32-signed, cz::32-signed>> <- payload)>>, do: {cx, cz}
     MoreChunks.Metrics.cast([:user_request, positions], state.remote)
 
     send_next_chunk(%{state | chunks_request: positions, chunk_send_timer: nil})
@@ -101,8 +102,8 @@ defmodule MoreChunks.Client do
     state
   end
 
-  defp send_next_chunk(state = %{chunks_request: [pos_long | remaining_positions]}) do
-    chunk_packet = MoreChunks.ChunkStorage.retrieve(pos_long)
+  defp send_next_chunk(state = %{chunks_request: [pos | remaining_positions]}) do
+    chunk_packet = MoreChunks.ChunkStorage.retrieve(pos)
 
     case chunk_packet do
       nil ->
@@ -111,7 +112,7 @@ defmodule MoreChunks.Client do
 
       chunk_packet ->
         :ok = :gen_tcp.send(state.socket, <<0::8, chunk_packet::binary>>)
-        MoreChunks.Metrics.cast([:sent_chunk, pos_long], state.remote)
+        MoreChunks.Metrics.cast([:sent_chunk, pos], state.remote)
 
         config_chunks_per_second = Application.get_env(:morechunks, :max_chunks_per_second, 80)
         chunks_per_second = min(state.chunks_per_second, config_chunks_per_second)

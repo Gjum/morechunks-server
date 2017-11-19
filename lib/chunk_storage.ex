@@ -76,16 +76,12 @@ defmodule MoreChunks.ChunkStorage do
   end
 
   def handle_call(:get_stored, _from, storage) do
-    positions =
-      Map.keys(storage)
-      |> Enum.map(&MoreChunks.nice_pos/1)
-
-    {:reply, positions, storage}
+    {:reply, Map.keys(storage), storage}
   end
 
   def load_chunk_async(position, receiver) do
     spawn_link(fn ->
-      chunk_data = load_chunk(MoreChunks.nice_pos(position))
+      chunk_data = load_chunk(position)
 
       GenServer.reply(receiver, chunk_data)
 
