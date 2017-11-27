@@ -1,11 +1,13 @@
 defmodule MoreChunks.Server do
+  require Logger
+
   def start_link(ip, port) do
     Task.start_link(__MODULE__, :init, [ip, port])
   end
 
   def init(ip, port) do
     Process.register(self(), __MODULE__)
-    MoreChunks.Metrics.cast([:start_module, __MODULE__, port, ip])
+    Logger.info(inspect([:start_module, __MODULE__, port, ip]))
 
     {:ok, listen_socket} =
       :gen_tcp.listen(

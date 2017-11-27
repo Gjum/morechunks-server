@@ -16,6 +16,7 @@ config :morechunks,
   ]
 
 config :logger,
+  level: :info,
   backends: [
     :console,
     {LoggerFileBackend, :file_log}

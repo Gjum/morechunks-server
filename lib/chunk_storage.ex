@@ -39,7 +39,7 @@ defmodule MoreChunks.ChunkStorage do
   ## Server Callbacks
 
   def init(_args) do
-    MoreChunks.Metrics.cast([:start_module, __MODULE__])
+    Logger.info(inspect([:start_module, __MODULE__]))
     {:ok, %{}}
   end
 
@@ -48,11 +48,12 @@ defmodule MoreChunks.ChunkStorage do
       Map.get_and_update(storage, position, fn old_packet -> {old_packet, chunk_data} end)
 
     if old_packet == nil do
-      MoreChunks.Metrics.cast([:chunk_creation, position, byte_size(chunk_data)])
+      # TODO this could also be an update if the chunk was stored on disk already
+      Logger.debug(inspect([:chunk_creation, position, byte_size(chunk_data)]))
     else
       bs_old = byte_size(old_packet)
       bs_new = byte_size(chunk_data)
-      MoreChunks.Metrics.cast([:chunk_update, position, bs_old, bs_new])
+      Logger.debug(inspect([:chunk_update, position, bs_old, bs_new]))
     end
 
     spawn_link(fn -> save_chunk(position, chunk_data) end)
@@ -65,7 +66,7 @@ defmodule MoreChunks.ChunkStorage do
   def handle_call({:retrieve, position}, from, storage) do
     case Map.fetch(storage, position) do
       {:ok, chunk} ->
-        MoreChunks.Metrics.cast([:chunk_lookup_hit, position])
+        Logger.debug(inspect([:chunk_lookup_hit, position]))
 
         {:reply, chunk, storage}
 
@@ -87,10 +88,10 @@ defmodule MoreChunks.ChunkStorage do
 
       case chunk_data do
         nil ->
-          MoreChunks.Metrics.cast([:chunk_lookup_miss, position])
+          Logger.debug(inspect([:chunk_lookup_miss, position]))
 
         chunk_data ->
-          MoreChunks.Metrics.cast([:chunk_loaded, position])
+          Logger.debug(inspect([:chunk_loaded, position]))
           GenServer.cast(__MODULE__, {:store, position, chunk_data})
       end
     end)
@@ -117,7 +118,7 @@ defmodule MoreChunks.ChunkStorage do
         nil
 
       {:error, err} ->
-        MoreChunks.Metrics.cast([:chunk_load_error, position, err])
+        Logger.warn(inspect([:chunk_load_error, position, err]))
         nil
     end
   end
@@ -134,7 +135,7 @@ defmodule MoreChunks.ChunkStorage do
         :ok
 
       {:error, err} ->
-        MoreChunks.Metrics.cast([:chunk_save_error, position, err])
+        Logger.warn(inspect([:chunk_save_error, position, err]))
         {:error, err}
     end
   end

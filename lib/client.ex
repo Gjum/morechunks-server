@@ -1,12 +1,15 @@
 defmodule MoreChunks.Client do
   use GenServer
 
+  require Logger
+
   def start_link(socket) do
     GenServer.start_link(__MODULE__, [socket])
   end
 
   def init([socket]) do
     {:ok, remote} = :inet.peername(socket)
+    Logger.metadata(client: inspect(remote))
 
     # only receive the single next packet,
     # to prevent swamping the inbox with tcp messages
@@ -14,15 +17,17 @@ defmodule MoreChunks.Client do
     # ie. in handle_info({:tcp, ...}, ...)
     :inet.setopts(socket, active: :once)
 
-    MoreChunks.Metrics.cast([:user_connected], remote)
-
-    {:ok, %{
+    state = %{
       remote: remote,
       socket: socket,
       chunks_request: [],
       chunks_per_second: 1,
       chunk_send_timer: nil
-    }}
+    }
+
+    Logger.info(inspect([:user_connected]))
+
+    {:ok, state}
   end
 
   # chunk
@@ -33,10 +38,10 @@ defmodule MoreChunks.Client do
       MoreChunks.ChunkStorage.store(pos, chunk_packet)
 
       packet_size = byte_size(chunk_packet)
-      MoreChunks.Metrics.cast([:user_contributed_chunk, pos, packet_size], state.remote)
+      Logger.debug(inspect([:user_contributed_chunk, pos, packet_size]))
     else
       err ->
-        MoreChunks.Metrics.cast([:invalid_user_chunk, err, payload], state.remote)
+        Logger.info(inspect([:invalid_user_chunk, err, payload]))
     end
 
     state
@@ -46,14 +51,14 @@ defmodule MoreChunks.Client do
   defp handle_packet(1, payload, state) do
     case payload do
       "game.dimension=0" ->
-        MoreChunks.Metrics.cast([:valid_dimension, 0], state.remote)
+        Logger.info(inspect([:valid_dimension, 0]))
 
         state
 
       <<"game.dimension=", invalid_dimension::bytes>> ->
         response = "error.invalid_dimension " <> invalid_dimension
         :ok = :gen_tcp.send(state.socket, <<1::8, response::binary>>)
-        MoreChunks.Metrics.cast([:invalid_dimension, invalid_dimension], state.remote)
+        Logger.info(inspect([:invalid_dimension, invalid_dimension]))
 
         # the client should disconnect upon receiving the response,
         # this is so clients that don't understand the response don't auto-reconnect
@@ -63,18 +68,18 @@ defmodule MoreChunks.Client do
 
       <<"mod.chunksPerSecond=", val::bytes>> ->
         with {chunks_per_second, ""} <- :string.to_integer(val) do
-          MoreChunks.Metrics.cast([:user_set_chunks_per_second, chunks_per_second], state.remote)
+          Logger.info(inspect([:user_set_chunks_per_second, chunks_per_second]))
 
           %{state | chunks_per_second: chunks_per_second}
         else
           {:error, :badarg} ->
-            MoreChunks.Metrics.cast([:invalid_chunks_per_second, payload], state.remote)
+            Logger.info(inspect([:invalid_chunks_per_second, payload]))
 
             state
         end
 
       unknown_payload ->
-        MoreChunks.Metrics.cast([:user_info_unknown, unknown_payload], state.remote)
+        Logger.warn(inspect([:user_info_unknown, unknown_payload]))
 
         state
     end
@@ -87,13 +92,13 @@ defmodule MoreChunks.Client do
     end
 
     positions = for <<(<<cx::32-signed, cz::32-signed>> <- payload)>>, do: {cx, cz}
-    MoreChunks.Metrics.cast([:user_request, positions], state.remote)
+    Logger.debug(inspect([:user_request, positions]))
 
     send_next_chunk(%{state | chunks_request: positions, chunk_send_timer: nil})
   end
 
   defp handle_packet(p_type, payload, state) do
-    MoreChunks.Metrics.cast([:unknown_packet_type, p_type, byte_size(payload)], state.remote)
+    Logger.warn(inspect([:unknown_packet_type, p_type, byte_size(payload)]))
 
     state
   end
@@ -112,7 +117,7 @@ defmodule MoreChunks.Client do
 
       chunk_packet ->
         :ok = :gen_tcp.send(state.socket, <<0::8, chunk_packet::binary>>)
-        MoreChunks.Metrics.cast([:sent_chunk, pos], state.remote)
+        Logger.debug(inspect([:sent_chunk, pos]))
 
         config_chunks_per_second = Application.get_env(:morechunks, :max_chunks_per_second, 80)
         chunks_per_second = min(state.chunks_per_second, config_chunks_per_second)
@@ -138,12 +143,12 @@ defmodule MoreChunks.Client do
   end
 
   def handle_info({:tcp_closed, _socket}, state) do
-    MoreChunks.Metrics.cast([:user_closed], state.remote)
+    Logger.info(inspect([:user_closed]))
     exit({:shutdown, :tcp_closed})
   end
 
   def handle_info({:tcp_error, _socket, error}, state) do
-    MoreChunks.Metrics.cast([:tcp_error, error], state.remote)
+    Logger.info(inspect([:tcp_error, error]))
     exit({:shutdown, :tcp_error})
   end
 
@@ -152,7 +157,7 @@ defmodule MoreChunks.Client do
     {:noreply, state}
   end
 
-  def handle_call(:get_chunks_request, _caller, state) do
-    {:reply, state.chunks_request, state}
+  def handle_call(:get_state, _caller, state) do
+    {:reply, state, state}
   end
 end

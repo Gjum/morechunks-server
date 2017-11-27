@@ -8,7 +8,6 @@ defmodule MoreChunks do
     listen_port = Application.get_env(:morechunks, :listen_port, 12312)
 
     children = [
-      worker(MoreChunks.Metrics, []),
       worker(MoreChunks.ChunkStorage, []),
       supervisor(MoreChunks.ClientSupervisor, []),
       worker(
