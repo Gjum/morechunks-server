@@ -27,6 +27,8 @@ defmodule MoreChunks.Client do
 
     Logger.info(inspect([:user_connected]))
 
+    :ok = :gen_tcp.send(state.socket, <<1::8, "! serverRenderDistance=4">>)
+
     {:ok, state}
   end
 
@@ -56,9 +58,12 @@ defmodule MoreChunks.Client do
         state
 
       <<"game.dimension=", invalid_dimension::bytes>> ->
-        response = "error.invalid_dimension " <> invalid_dimension
-        :ok = :gen_tcp.send(state.socket, <<1::8, response::binary>>)
         Logger.info(inspect([:invalid_dimension, invalid_dimension]))
+
+        response = "i3 You're not playing in the overworld, pausing MoreChunks"
+        :ok = :gen_tcp.send(state.socket, <<1::8, response::binary>>)
+
+        :ok = :gen_tcp.send(state.socket, <<1::8, "! kick ms=60000">>)
 
         # the client should disconnect upon receiving the response,
         # this is so clients that don't understand the response don't auto-reconnect
