@@ -22,4 +22,9 @@ config :logger,
     {LoggerFileBackend, :file_log}
   ]
 
-config :logger, :file_log, path: "morechunks.log"
+config :logger, :console,
+  metadata: [:module, :client]
+
+config :logger, :file_log,
+  path: "morechunks.log",
+  metadata: [:module, :client]
