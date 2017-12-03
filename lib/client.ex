@@ -3,6 +3,14 @@ defmodule MoreChunks.Client do
 
   require Logger
 
+  @type state :: %{
+          remote: {:inet.ip_address(), :inet.port_number()},
+          socket: :inet.socket(),
+          chunks_request: [MoreChunks.ChunkStorage.position()],
+          chunks_per_second: non_neg_integer,
+          chunk_send_timer: nil | Process.reference()
+        }
+
   def start_link(socket) do
     GenServer.start_link(__MODULE__, [socket])
   end
@@ -32,9 +40,11 @@ defmodule MoreChunks.Client do
     {:ok, state}
   end
 
+  @spec handle_packet(non_neg_integer, binary, state) :: state
+
   # chunk
   defp handle_packet(0, payload, state) do
-    with <<timestamp::64, chunk_packet::binary>> <- payload,
+    with <<_timestamp::64, chunk_packet::binary>> <- payload,
          <<cx::32-signed, cz::32-signed, _::binary>> <- chunk_packet do
       pos = {cx, cz}
       MoreChunks.ChunkStorage.store(pos, chunk_packet)
@@ -147,12 +157,12 @@ defmodule MoreChunks.Client do
     {:noreply, state}
   end
 
-  def handle_info({:tcp_closed, _socket}, state) do
+  def handle_info({:tcp_closed, _socket}, _state) do
     Logger.info(inspect([:user_closed]))
     exit({:shutdown, :tcp_closed})
   end
 
-  def handle_info({:tcp_error, _socket, error}, state) do
+  def handle_info({:tcp_error, _socket, error}, _state) do
     Logger.info(inspect([:tcp_error, error]))
     exit({:shutdown, :tcp_error})
   end

@@ -3,6 +3,12 @@ defmodule MoreChunks.ChunkStorage do
 
   require Logger
 
+  @type position :: {integer, integer}
+  @type chunk_data :: binary
+  @type storage_config :: %{:storage_path => binary, optional(any) => any}
+
+  @default_conf %{storage_path: "mccp_storage"}
+
   ## Client API
 
   def start_link() do
@@ -16,6 +22,7 @@ defmodule MoreChunks.ChunkStorage do
     - position: 64Bit number representing the chunk cordinates.
     - chunk_data: serialized chunk in the form of a Chunk Data packet.
   """
+  @spec store(position, chunk_data) :: :ok
   def store(position, chunk_data) do
     # TODO timestamp
     GenServer.cast(__MODULE__, {:store, position, chunk_data})
@@ -27,11 +34,13 @@ defmodule MoreChunks.ChunkStorage do
   ## Parameters
     - position: 64Bit number representing the chunk cordinates.
   """
+  @spec retrieve(position) :: chunk_data | nil
   def retrieve(position) do
     GenServer.call(__MODULE__, {:retrieve, position})
   end
 
   @doc "Retrieve the positions of all stored chunks."
+  @spec get_stored() :: [position]
   def get_stored() do
     GenServer.call(__MODULE__, :get_stored)
   end
@@ -80,9 +89,10 @@ defmodule MoreChunks.ChunkStorage do
     {:reply, Map.keys(storage), storage}
   end
 
-  def load_chunk_async(position, receiver) do
+  @spec load_chunk_async(position, GenServer.from(), storage_config) :: any
+  def load_chunk_async(position, receiver, config \\ @default_conf) do
     spawn_link(fn ->
-      chunk_data = load_chunk(position)
+      chunk_data = load_chunk(position, config)
 
       GenServer.reply(receiver, chunk_data)
 
@@ -97,7 +107,8 @@ defmodule MoreChunks.ChunkStorage do
     end)
   end
 
-  def load_chunk(position, config \\ %{storage_path: "mccp_storage"}) do
+  @spec load_chunk(position, storage_config) :: chunk_data | nil
+  def load_chunk(position, config \\ @default_conf) do
     region_path = get_region_path(position, config)
     chunk_path = "#{region_path}/#{get_chunk_filename(position)}"
 
@@ -123,7 +134,8 @@ defmodule MoreChunks.ChunkStorage do
     end
   end
 
-  def save_chunk(position, chunk_data, config \\ %{storage_path: "mccp_storage"}) do
+  @spec save_chunk(position, chunk_data, storage_config) :: :ok | {:error, any}
+  def save_chunk(position, chunk_data, config \\ @default_conf) do
     region_path = get_region_path(position, config)
     File.mkdir_p!(region_path)
     chunk_path = "#{region_path}/#{get_chunk_filename(position)}"
@@ -140,10 +152,12 @@ defmodule MoreChunks.ChunkStorage do
     end
   end
 
+  @spec get_chunk_filename(position) :: binary
   defp get_chunk_filename({cx, cz}) do
     "#{cx}_#{cz}.mccp"
   end
 
+  @spec get_region_path(position, storage_config) :: binary
   defp get_region_path({cx, cz}, config) do
     # TODO -2 -> 0, should be -2 -> -1
     rx = div(cx, 32)
