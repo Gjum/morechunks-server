@@ -15,25 +15,14 @@ defmodule MoreChunks.ChunkStorage do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
-  @doc """
-  Store the serialized chunk.
-
-  ## Parameters
-    - position: 64Bit number representing the chunk cordinates.
-    - chunk_data: serialized chunk in the form of a Chunk Data packet.
-  """
+  @doc "Store the serialized chunk."
   @spec store(position, chunk_data) :: :ok
   def store(position, chunk_data) do
     # TODO timestamp
     GenServer.cast(__MODULE__, {:store, position, chunk_data})
   end
 
-  @doc """
-  Retrieve a serialized chunk.
-
-  ## Parameters
-    - position: 64Bit number representing the chunk cordinates.
-  """
+  @doc "Retrieve a serialized chunk."
   @spec retrieve(position) :: chunk_data | nil
   def retrieve(position) do
     GenServer.call(__MODULE__, {:retrieve, position})
