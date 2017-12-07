@@ -82,13 +82,13 @@ defmodule MoreChunks.Client do
         exit({:shutdown, {:client_error, {:invalid_dimension, invalid_dimension}}})
 
       <<"mod.chunksPerSecond=", val::bytes>> ->
-        with {chunks_per_second, ""} <- :string.to_integer(val) do
+        with {chunks_per_second, []} <- :string.to_integer(String.to_charlist(val)) do
           Logger.info(inspect([:user_set_chunks_per_second, chunks_per_second]))
 
           %{state | chunks_per_second: chunks_per_second}
         else
-          {:error, :badarg} ->
-            Logger.info(inspect([:invalid_chunks_per_second, payload]))
+          other ->
+            Logger.info(inspect([:invalid_chunks_per_second, other, payload]))
 
             state
         end
