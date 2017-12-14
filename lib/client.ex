@@ -16,28 +16,30 @@ defmodule MoreChunks.Client do
   end
 
   def init([socket]) do
-    {:ok, remote} = :inet.peername(socket)
-    Logger.metadata(client: inspect(remote))
+    with {:ok, remote} <- :inet.peername(socket),
+         :ok <- :gen_tcp.send(socket, <<1::8, "! serverRenderDistance=4">>) do
+      Logger.metadata(client: inspect(remote))
+      Logger.info(inspect([:user_connected]))
 
-    # only receive the single next packet,
-    # to prevent swamping the inbox with tcp messages
-    # this also has to be called after every time we've received a tcp message
-    # ie. in handle_info({:tcp, ...}, ...)
-    :inet.setopts(socket, active: :once)
+      # only receive the single next packet,
+      # to prevent swamping the inbox with tcp messages
+      # this also has to be called after every time we've received a tcp message
+      # ie. in handle_info({:tcp, ...}, ...)
+      :inet.setopts(socket, active: :once)
 
-    state = %{
-      remote: remote,
-      socket: socket,
-      chunks_request: [],
-      chunks_per_second: 1,
-      chunk_send_timer: nil
-    }
+      state = %{
+        remote: remote,
+        socket: socket,
+        chunks_request: [],
+        chunks_per_second: 1,
+        chunk_send_timer: nil
+      }
 
-    Logger.info(inspect([:user_connected]))
-
-    :ok = :gen_tcp.send(state.socket, <<1::8, "! serverRenderDistance=4">>)
-
-    {:ok, state}
+      {:ok, state}
+    else
+      unexpected ->
+        {:stop, unexpected}
+    end
   end
 
   @spec handle_packet(non_neg_integer, binary, state) :: state
@@ -70,7 +72,7 @@ defmodule MoreChunks.Client do
       <<"game.dimension=", invalid_dimension::bytes>> ->
         Logger.info(inspect([:invalid_dimension, invalid_dimension]))
 
-        response = "i3 You're not playing in the overworld, pausing MoreChunks"
+        response = "i3 You're not in the overworld"
         :ok = :gen_tcp.send(state.socket, <<1::8, response::binary>>)
 
         :ok = :gen_tcp.send(state.socket, <<1::8, "! kick ms=60000">>)
