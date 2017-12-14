@@ -109,7 +109,7 @@ defmodule MoreChunks.Client do
     end
 
     positions = for <<(<<cx::32-signed, cz::32-signed>> <- payload)>>, do: {cx, cz}
-    Logger.debug(inspect([:user_request, positions]))
+    Logger.info(inspect([:user_request, length(positions), positions]))
 
     send_next_chunk(%{state | chunks_request: positions, chunk_send_timer: nil})
   end
