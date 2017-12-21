@@ -11,6 +11,8 @@ defmodule MoreChunks.Client do
           chunk_send_timer: nil | Process.reference()
         }
 
+  @allowed_versions Application.get_env(MoreChunks, :allowed_versions, nil)
+
   def start_link(socket) do
     GenServer.start_link(__MODULE__, [socket])
   end
@@ -94,6 +96,26 @@ defmodule MoreChunks.Client do
 
             state
         end
+
+      <<"mod.version=", version::bytes>> ->
+        if @allowed_versions == nil or Enum.member?(@allowed_versions, version) do
+          Logger.info(inspect([:valid_client_version, version]))
+        else
+          Logger.warn(inspect([:invalid_client_version, version]))
+
+          response = "i3 Please update: bit.ly/morechunks-latest"
+          :ok = :gen_tcp.send(state.socket, <<1::8, response::binary>>)
+
+          :ok = :gen_tcp.send(state.socket, <<1::8, "! kick ms=300000">>)
+
+          # the client should disconnect upon receiving the response,
+          # this is so clients that don't understand the response don't auto-reconnect
+          Process.sleep(300_000)
+
+          exit({:shutdown, {:client_error, {:invalid_client_version, version}}})
+        end
+
+        state
 
       unknown_payload ->
         Logger.warn(inspect([:user_info_unknown, unknown_payload]))
