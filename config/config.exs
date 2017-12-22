@@ -12,15 +12,15 @@ config :morechunks,
   ]
 
 config :logger,
-  level: :info,
   backends: [
     :console,
     {LoggerFileBackend, :file_log}
   ]
 
 config :logger, :console,
-  metadata: [:module, :client]
+  level: :info,
+  metadata: [:client]
 
 config :logger, :file_log,
   path: "morechunks.log",
-  metadata: [:module, :client]
+  metadata: [:client]
