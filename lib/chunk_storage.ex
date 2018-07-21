@@ -85,13 +85,9 @@ defmodule MoreChunks.ChunkStorage do
 
       GenServer.reply(receiver, chunk_data)
 
-      case chunk_data do
-        nil ->
-          Logger.debug(inspect([:chunk_lookup_miss, position]))
-
-        chunk_data ->
-          Logger.debug(inspect([:chunk_loaded, position]))
-          GenServer.cast(__MODULE__, {:store, position, chunk_data})
+      if chunk_data do
+        Logger.debug(inspect([:chunk_loaded, position]))
+        GenServer.cast(__MODULE__, {:store, position, chunk_data})
       end
     end)
   end

@@ -152,10 +152,11 @@ defmodule MoreChunks.Client do
     case chunk_packet do
       nil ->
         # skip unknown chunk
+        Logger.debug(inspect([:chunk_request_miss, pos]))
         send_next_chunk(%{state | chunks_request: remaining_positions})
 
       chunk_packet ->
-        :ok = :gen_tcp.send(state.socket, <<0::8, chunk_packet::binary>>)
+        :ok = :gen_tcp.send(state.socket, <<0::8, chunk_packet::binary, 0::8>>)
         Logger.debug(inspect([:sent_chunk, pos]))
 
         config_chunks_per_second = Application.get_env(:morechunks, :max_chunks_per_second, 80)
