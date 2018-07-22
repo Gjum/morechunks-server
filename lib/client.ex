@@ -103,10 +103,9 @@ defmodule MoreChunks.Client do
         else
           Logger.warn(inspect([:invalid_client_version, version]))
 
-          response = "i3 Please update: bit.ly/morechunks-latest"
-          :ok = :gen_tcp.send(state.socket, <<1::8, response::binary>>)
+          :ok = :gen_tcp.send(state.socket, "\x01i3 Please update: bit.ly/morechunks-latest")
 
-          :ok = :gen_tcp.send(state.socket, <<1::8, "! kick ms=300000">>)
+          :ok = :gen_tcp.send(state.socket, "\x01! kick ms=300000")
 
           # the client should disconnect upon receiving the response,
           # this is so clients that don't understand the response don't auto-reconnect
